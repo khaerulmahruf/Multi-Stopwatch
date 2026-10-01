@@ -20,6 +20,8 @@
     { name: 'Bebas Neue',     css: "'Bebas Neue', sans-serif",    dw: 0.46 },
   ];
   const PRESETS = ['5K', '10K', '21K', '42K', 'HM', 'FM', 'START', 'FINISH'];
+  const BG_COLORS = ['#050505', '#0b1f3a', '#1a0b2e', '#0b2e1a', '#3a0b14', '#3a2e0b', '#0b3a3f', '#ffffff'];
+  const DEFAULT_BG = '#050505';
   const COLORS = ['#00e5ff', '#39ff14', '#ffea00', '#ff3d71', '#ff9100', '#b388ff', '#ffffff', '#2979ff'];
 
   // ---------- State ----------
@@ -42,7 +44,7 @@
   function newWatch(id, top, color) {
     return {
       id, top: top || '', bottom: '', font: 'Orbitron',
-      color: color || COLORS[0], size: 100, show: true, open: false,
+      color: color || COLORS[0], bg: DEFAULT_BG, size: 100, show: true, open: false,
       base: 0, startEpoch: null, laps: [], note: '',
     };
   }
@@ -107,6 +109,27 @@
     return `${pad(h, 2)}:${pad(m, 2)}:${pad(s, 2)}.${pad(ms % 1000, 3)}`;
   }
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function hexToRgb(h) {
+    h = String(h).replace('#', '');
+    if (h.length === 3) h = [...h].map(x => x + x).join('');
+    const n = parseInt(h, 16) || 0;
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+  }
+  function mixHex(a, b, t) { // t = porsi warna a
+    const A = hexToRgb(a), B = hexToRgb(b);
+    return rgbToHex(...A.map((v, i) => v * t + B[i] * (1 - t)));
+  }
+  function lum(h) {
+    const [r, g, b] = hexToRgb(h).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+  function contrast(a, b) {
+    const x = lum(a), y = lum(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  }
   const fontOf = name => FONTS.find(f => f.name === name) || FONTS[0];
   const get = id => state.watches.find(w => w.id === Number(id));
 
@@ -127,6 +150,7 @@
   function cardHTML(w, index) {
     const fontOpts = FONTS.map(f => `<option value="${esc(f.name)}"${f.name === w.font ? ' selected' : ''}>${esc(f.name)}</option>`).join('');
     const chips = target => PRESETS.map(p => `<button class="chip" data-action="chip" data-target="${target}" data-val="${p}">${p}</button>`).join('');
+    const bgsw = BG_COLORS.map(c => `<button class="sw" data-action="bgswatch" data-val="${c}" style="background:${c}" title="${c}" aria-label="Latar ${c}"></button>`).join('');
     const sw = COLORS.map(c => `<button class="sw" data-action="swatch" data-val="${c}" style="background:${c}" title="${c}" aria-label="Warna ${c}"></button>`).join('');
     return `
       <span class="slot" title="Tombol cepat ${index + 1}">${index < 9 ? index + 1 : ''}</span>
@@ -135,6 +159,7 @@
       <div class="lastlap"></div>
       <div class="label bottom"></div>
 
+      <div class="tools">
       <div class="ctrl">
         <button class="btn go" data-action="toggle">Mulai</button>
         <button class="btn" data-action="lap">Lap</button>
@@ -165,6 +190,14 @@
           </div>
         </div>
         <div class="field">
+          <span>Warna latar</span>
+          <div class="row">
+            <input type="color" data-field="bg" value="${esc(w.bg || DEFAULT_BG)}" aria-label="Pilih warna latar">
+            <div class="swatches">${bgsw}</div>
+          </div>
+          <button class="btn" data-action="tint">Latar gelap dari warna border</button>
+        </div>
+        <div class="field">
           <span>Ukuran tampilan</span>
           <input type="range" data-field="size" min="50" max="120" step="5" value="${w.size}">
         </div>
@@ -175,6 +208,7 @@
       <div class="laps"></div>
       <div class="note">
         <textarea data-field="note" placeholder="Catatan untuk stopwatch ini (nomor bib, kendala, dll.)">${esc(w.note)}</textarea>
+      </div>
       </div>`;
   }
 
@@ -233,7 +267,12 @@
     const f = fontOf(w.font);
     const m = metricsFor(f);
     const c = r.card;
+    const bg = w.bg || DEFAULT_BG;
+    const fg = contrast('#ffffff', bg) >= contrast('#000000', bg) ? '#ffffff' : '#000000';
     c.style.setProperty('--c', w.color);
+    c.style.setProperty('--bg', bg);
+    c.style.setProperty('--fg', fg);
+    c.style.setProperty('--lbl', contrast(w.color, bg) >= 3 ? w.color : fg);
     c.style.setProperty('--font', f.css);
     c.style.setProperty('--dw', m.dw.toFixed(3) + 'em');
     c.style.setProperty('--cw', m.cw.toFixed(3) + 'em');
@@ -245,7 +284,8 @@
     c.querySelector('.label.top').textContent = w.top;
     c.querySelector('.label.bottom').textContent = w.bottom;
     c.classList.toggle('hide-display', !w.show);
-    const sw = c.querySelector('input[type="color"]'); if (sw) sw.value = w.color;
+    const pc = c.querySelector('[data-field="color"]'); if (pc) pc.value = w.color;
+    const pb = c.querySelector('[data-field="bg"]'); if (pb) pb.value = bg;
   }
 
   function syncButtons(w) {
@@ -340,6 +380,8 @@
       applyStyle(w);
     }
     else if (a === 'swatch') { w.color = btn.dataset.val; applyStyle(w); }
+    else if (a === 'bgswatch') { w.bg = btn.dataset.val; applyStyle(w); }
+    else if (a === 'tint') { w.bg = mixHex(w.color, '#000000', 0.22); applyStyle(w); }
     save();
   });
 
@@ -349,6 +391,7 @@
     const f = el.dataset.field;
     if (f === 'top' || f === 'bottom' || f === 'note') w[f] = el.value;
     else if (f === 'color') w.color = el.value;
+    else if (f === 'bg') w.bg = el.value;
     else if (f === 'size') w.size = Number(el.value);
     else if (f === 'font') w.font = el.value;
     else if (f === 'lapnote') {
