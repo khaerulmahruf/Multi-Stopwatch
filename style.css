@@ -99,10 +99,13 @@ select { font-size: .88rem; }
   --cw: .62em;
   --pw: .3em;
   --font: 'Orbitron', monospace;
+  --bg: #050505;
+  --fg: #ffffff;
+  --lbl: #00e5ff;
 
   position: relative;
   container-type: inline-size;
-  background: #030303;
+  background: var(--bg);
   border: 5px solid var(--c);
   border-radius: 20px;
   padding: 14px 16px 16px;
@@ -117,13 +120,13 @@ select { font-size: .88rem; }
   position: absolute;
   top: 8px; left: 12px;
   font: 700 .72rem system-ui, sans-serif;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--fg) 60%, var(--bg));
 }
 
 .label {
   font-family: var(--font);
   font-weight: 700;
-  color: var(--c);
+  color: var(--lbl);
   text-align: center;
   line-height: 1.05;
   letter-spacing: .06em;
@@ -140,7 +143,7 @@ select { font-size: .88rem; }
   align-items: baseline;
   font-family: var(--font);
   font-weight: 700;
-  color: #fff;
+  color: var(--fg);
   line-height: 1;
   white-space: nowrap;
   font-size: calc(84cqw / var(--em) * var(--scale));
@@ -155,18 +158,26 @@ select { font-size: .88rem; }
 .time .c { width: var(--cw); }
 .time .p { width: var(--pw); }
 .time .ms { opacity: .78; }
-.card:not(.running) .time { color: #d9d9d9; }
+.card:not(.running) .time { color: color-mix(in srgb, var(--fg) 84%, var(--bg)); }
 
 .lastlap {
   display: none;
   text-align: center;
   font-family: var(--font);
-  color: var(--muted);
+  color: color-mix(in srgb, var(--fg) 65%, var(--bg));
   font-size: calc(5.2cqw * var(--scale));
   padding-bottom: .3em;
 }
 
-.ctrl { display: flex; gap: 8px; margin-top: 10px; }
+.tools {
+  margin-top: 12px;
+  padding: 10px;
+  background: #050505;
+  color: var(--text);
+  border: 1px solid #1c1c1c;
+  border-radius: 14px;
+}
+.ctrl { display: flex; gap: 8px; }
 .ctrl .btn { flex: 1; padding: 11px 8px; font-size: .95rem; }
 .ctrl .btn.icon { flex: 0 0 48px; }
 
@@ -258,6 +269,7 @@ input[type="range"] { width: 100%; accent-color: var(--c); }
 
 /* ---------- Display mode (videotron) ---------- */
 body.display .bar,
+body.display .tools,
 body.display .foot,
 body.display .ctrl,
 body.display .settings,
