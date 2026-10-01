@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multi Stopwatch · Timing Event Lari</title>
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏱️</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Bebas+Neue&family=Chakra+Petch:wght@500;700&family=Orbitron:wght@500;800&family=Oswald:wght@500;700&family=Rajdhani:wght@500;700&family=Roboto+Mono:wght@500;700&family=Share+Tech+Mono&family=Space+Mono:wght@400;700&family=Teko:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="bar" id="bar">
+    <h1>Multi Stopwatch</h1>
+
+    <div class="group">
+      <button class="btn primary" id="btnAdd">+ Stopwatch</button>
+      <button class="btn" id="btnSet">Set 5K / 10K / 21K / 42K</button>
+    </div>
+
+    <div class="group">
+      <button class="btn go" id="btnStartAll">Mulai semua</button>
+      <button class="btn" id="btnPauseAll">Jeda semua</button>
+      <button class="btn danger" id="btnResetAll">Reset semua</button>
+    </div>
+
+    <div class="group">
+      <button class="btn" id="btnCsv">Ekspor CSV</button>
+    </div>
+
+    <div class="group display-opts">
+      <label class="inline">Kolom layar
+        <select id="selCols">
+          <option value="1">1</option>
+          <option value="2" selected>2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+        </select>
+      </label>
+      <label class="inline check"><input type="checkbox" id="chkLast"> Tampilkan lap terakhir</label>
+      <button class="btn primary" id="btnDisplay" title="Tombol D">Mode layar</button>
+      <button class="btn" id="btnFull">Layar penuh</button>
+    </div>
+  </header>
+
+  <main id="grid" class="grid" aria-live="off"></main>
+
+  <div class="floating" id="floating">
+    <button class="btn" id="btnExit">Keluar mode layar</button>
+    <button class="btn" id="btnFull2">Layar penuh</button>
+  </div>
+
+  <footer class="foot" id="foot">
+    Tombol cepat: <kbd>1</kbd>–<kbd>9</kbd> mulai/jeda stopwatch ke-N ·
+    <kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>9</kbd> lap ·
+    <kbd>D</kbd> mode layar · <kbd>Esc</kbd> keluar.
+    Data tersimpan otomatis di browser ini.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
