@@ -1,11 +1,13 @@
+
+App · JS
 /* Multi Stopwatch untuk timing event lari
    Tanpa framework, tanpa build. Buka index.html atau pasang di GitHub Pages. */
 (() => {
   'use strict';
-
+ 
   // ---------- Konfigurasi ----------
   const STORAGE_KEY = 'multi-stopwatch-v1';
-
+ 
   // dw = perkiraan lebar angka (em) agar digit tidak "bergoyang" saat berganti
   const FONTS = [
     { name: 'Orbitron',       css: "'Orbitron', monospace",       dw: 0.80 },
@@ -21,10 +23,10 @@
   ];
   const PRESETS = ['5K', '10K', '21K', '42K', 'HM', 'FM', 'START', 'FINISH'];
   const COLORS = ['#00e5ff', '#39ff14', '#ffea00', '#ff3d71', '#ff9100', '#b388ff', '#ffffff', '#2979ff'];
-
+ 
   // ---------- State ----------
   let state = load() || defaultState();
-
+ 
   function defaultState() {
     return {
       nextId: 5,
@@ -38,7 +40,7 @@
       ],
     };
   }
-
+ 
   function newWatch(id, top, color) {
     return {
       id, top: top || '', bottom: '', font: 'Orbitron',
@@ -46,7 +48,7 @@
       base: 0, startEpoch: null, laps: [], note: '',
     };
   }
-
+ 
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -62,7 +64,7 @@
       return s;
     } catch (e) { return null; }
   }
-
+ 
   let saveTimer = null;
   function save() {
     clearTimeout(saveTimer);
@@ -72,11 +74,11 @@
       } catch (e) { /* penyimpanan penuh / diblokir */ }
     }, 150);
   }
-
+ 
   // ---------- Waktu ----------
   const isRunning = w => w.startPerf != null;
   const elapsed = w => w.base + (isRunning(w) ? performance.now() - w.startPerf : 0);
-
+ 
   function start(w) {
     if (isRunning(w)) return;
     w.startPerf = performance.now();
@@ -97,7 +99,7 @@
   function reset(w) {
     w.base = 0; w.startPerf = null; w.startEpoch = null; w.laps = [];
   }
-
+ 
   const pad = (n, l) => String(n).padStart(l, '0');
   function fmt(ms) {
     ms = Math.max(0, Math.floor(ms));
@@ -109,21 +111,21 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fontOf = name => FONTS.find(f => f.name === name) || FONTS[0];
   const get = id => state.watches.find(w => w.id === Number(id));
-
+ 
   // ---------- Render ----------
   const grid = document.getElementById('grid');
   const refs = new Map(); // id -> { card, chars:[], last:'' }
-
+ 
   function timeHTML() {
     // HH:MM:SS.mmm -> 12 karakter; tiap karakter punya lebar tetap
     const tpl = '00:00:00.000';
     return [...tpl].map((ch, i) => {
       if (ch === ':') return '<span class="c">:</span>';
-      if (ch === '.') return '<span class="c ms">.</span>';
+      if (ch === '.') return '<span class="c p ms">.</span>';
       return `<span class="d${i > 8 ? ' ms' : ''}">0</span>`;
     }).join('');
   }
-
+ 
   function cardHTML(w, index) {
     const fontOpts = FONTS.map(f => `<option value="${esc(f.name)}"${f.name === w.font ? ' selected' : ''}>${esc(f.name)}</option>`).join('');
     const chips = target => PRESETS.map(p => `<button class="chip" data-action="chip" data-target="${target}" data-val="${p}">${p}</button>`).join('');
@@ -134,14 +136,14 @@
       <div class="time" aria-label="Waktu stopwatch">${timeHTML()}</div>
       <div class="lastlap"></div>
       <div class="label bottom"></div>
-
+ 
       <div class="ctrl">
         <button class="btn go" data-action="toggle">Mulai</button>
         <button class="btn" data-action="lap">Lap</button>
         <button class="btn" data-action="reset">Reset</button>
         <button class="btn icon" data-action="settings" title="Pengaturan" aria-label="Pengaturan">⚙</button>
       </div>
-
+ 
       <div class="settings"${w.open ? '' : ' hidden'}>
         <div class="field">
           <span>Teks atas</span>
@@ -171,13 +173,13 @@
         <label class="inline check"><input type="checkbox" data-field="show"${w.show ? ' checked' : ''}> Tampilkan di mode layar</label>
         <button class="btn danger" data-action="delete">Hapus stopwatch ini</button>
       </div>
-
+ 
       <div class="laps"></div>
       <div class="note">
         <textarea data-field="note" placeholder="Catatan untuk stopwatch ini (nomor bib, kendala, dll.)">${esc(w.note)}</textarea>
       </div>`;
   }
-
+ 
   function buildCard(w, index) {
     const card = document.createElement('article');
     card.className = 'card';
@@ -190,7 +192,7 @@
     syncButtons(w);
     return card;
   }
-
+ 
   function renderAll() {
     refs.clear();
     grid.textContent = '';
@@ -198,23 +200,56 @@
     updateLayout();
     tickAll(true);
   }
-
+ 
+  // Lebar angka, titik dua, dan titik diukur dari font yang benar-benar terpasang
+  const metrics = new Map();   // nama font -> { dw, cw, pw } dalam em
+  const measuring = new Set();
+  const measureCtx = document.createElement('canvas').getContext('2d');
+ 
+  function measure(f) {
+    measureCtx.font = `700 100px ${f.css}`;
+    let dw = 0;
+    for (let i = 0; i < 10; i++) dw = Math.max(dw, measureCtx.measureText(String(i)).width / 100);
+    return {
+      dw,
+      cw: measureCtx.measureText(':').width / 100,
+      pw: measureCtx.measureText('.').width / 100,
+    };
+  }
+  function metricsFor(f) {
+    // perkiraan sementara sampai font selesai dimuat dan diukur
+    return metrics.get(f.name) || { dw: f.dw, cw: f.dw, pw: f.dw * 0.5 };
+  }
+  function ensureMetrics(f) {
+    if (metrics.has(f.name) || measuring.has(f.name) || !document.fonts) return;
+    measuring.add(f.name);
+    document.fonts.load(`700 100px ${f.css}`).catch(() => {}).then(() => {
+      metrics.set(f.name, measure(f));
+      measuring.delete(f.name);
+      state.watches.filter(w => w.font === f.name).forEach(applyStyle);
+    });
+  }
+ 
   function applyStyle(w) {
     const r = refs.get(w.id); if (!r) return;
     const f = fontOf(w.font);
+    const m = metricsFor(f);
     const c = r.card;
     c.style.setProperty('--c', w.color);
     c.style.setProperty('--font', f.css);
-    c.style.setProperty('--dw', f.dw + 'em');
-    // 9 digit + 3 pemisah (lebar .45 dw) -> total lebar dalam em
-    c.style.setProperty('--em', (9 * f.dw + 3 * f.dw * 0.45).toFixed(3));
+    c.style.setProperty('--dw', m.dw.toFixed(3) + 'em');
+    c.style.setProperty('--cw', m.cw.toFixed(3) + 'em');
+    c.style.setProperty('--pw', m.pw.toFixed(3) + 'em');
+    // 9 angka + 2 titik dua + 1 titik -> total lebar dalam em
+    c.style.setProperty('--em', (9 * m.dw + 2 * m.cw + m.pw).toFixed(3));
+    ensureMetrics(f);
     c.style.setProperty('--scale', (w.size / 100).toFixed(2));
     c.querySelector('.label.top').textContent = w.top;
     c.querySelector('.label.bottom').textContent = w.bottom;
     c.classList.toggle('hide-display', !w.show);
     const sw = c.querySelector('input[type="color"]'); if (sw) sw.value = w.color;
   }
-
+ 
   function syncButtons(w) {
     const r = refs.get(w.id); if (!r) return;
     const running = isRunning(w);
@@ -223,7 +258,7 @@
     t.textContent = running ? 'Jeda' : (w.base > 0 ? 'Lanjut' : 'Mulai');
     t.classList.toggle('go', !running);
   }
-
+ 
   function renderLaps(w) {
     const r = refs.get(w.id); if (!r) return;
     const box = r.card.querySelector('.laps');
@@ -251,7 +286,7 @@
     const l = w.laps[w.laps.length - 1];
     last.textContent = `Lap ${l.n} · ${fmt(l.lap)}`;
   }
-
+ 
   function updateTime(w, force) {
     const r = refs.get(w.id); if (!r) return;
     if (!force && !isRunning(w)) return;
@@ -265,7 +300,7 @@
   }
   function tickAll(force) { state.watches.forEach(w => updateTime(w, force)); }
   function loop() { tickAll(false); requestAnimationFrame(loop); }
-
+ 
   // ---------- Layout mode layar ----------
   function updateLayout() {
     const visible = state.watches.filter(w => w.show).length || 1;
@@ -276,7 +311,7 @@
     document.getElementById('selCols').value = String(state.cols);
     document.getElementById('chkLast').checked = !!state.showLast;
   }
-
+ 
   // ---------- Aksi kartu ----------
   grid.addEventListener('click', e => {
     const btn = e.target.closest('[data-action]');
@@ -284,7 +319,7 @@
     const card = btn.closest('.card');
     const w = get(card.dataset.id);
     const a = btn.dataset.action;
-
+ 
     if (a === 'toggle') { isRunning(w) ? pause(w) : start(w); syncButtons(w); updateTime(w, true); }
     else if (a === 'lap') { lap(w); renderLaps(w); }
     else if (a === 'reset') {
@@ -309,7 +344,7 @@
     else if (a === 'swatch') { w.color = btn.dataset.val; applyStyle(w); }
     save();
   });
-
+ 
   grid.addEventListener('input', e => {
     const el = e.target.closest('[data-field]'); if (!el) return;
     const w = get(el.closest('.card').dataset.id);
@@ -325,17 +360,17 @@
     applyStyle(w);
     save();
   });
-
+ 
   grid.addEventListener('change', e => {
     const el = e.target.closest('[data-field="show"]'); if (!el) return;
     const w = get(el.closest('.card').dataset.id);
     w.show = el.checked;
     applyStyle(w); updateLayout(); save();
   });
-
+ 
   // ---------- Kontrol global ----------
   const $ = id => document.getElementById(id);
-
+ 
   $('btnAdd').onclick = () => {
     const id = state.nextId++;
     const w = newWatch(id, `Stopwatch ${state.watches.length + 1}`, COLORS[state.watches.length % COLORS.length]);
@@ -362,7 +397,7 @@
   };
   $('selCols').onchange = e => { state.cols = Number(e.target.value); updateLayout(); save(); };
   $('chkLast').onchange = e => { state.showLast = e.target.checked; updateLayout(); save(); };
-
+ 
   // ---------- Ekspor CSV ----------
   $('btnCsv').onclick = () => {
     const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -380,7 +415,7 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   };
-
+ 
   // ---------- Mode layar & layar penuh ----------
   let wakeLock = null;
   async function keepAwake(on) {
@@ -401,7 +436,7 @@
   $('btnDisplay').onclick = () => setDisplay(true);
   $('btnExit').onclick = () => setDisplay(false);
   $('btnFull').onclick = $('btnFull2').onclick = toggleFullscreen;
-
+ 
   // tampilkan kursor dan tombol sebentar saat mouse digerakkan di mode layar
   let cursorTimer = null;
   document.addEventListener('mousemove', () => {
@@ -413,16 +448,16 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && document.body.classList.contains('display')) keepAwake(true);
   });
-
+ 
   // ---------- Tombol cepat ----------
   document.addEventListener('keydown', e => {
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-
+ 
     if (e.key === 'Escape') { if (document.body.classList.contains('display')) setDisplay(false); return; }
     if (e.code === 'KeyD') { setDisplay(!document.body.classList.contains('display')); return; }
-
+ 
     const m = /^Digit([1-9])$/.exec(e.code);
     if (!m) return;
     const w = state.watches[Number(m[1]) - 1];
@@ -432,13 +467,14 @@
     else { isRunning(w) ? pause(w) : start(w); syncButtons(w); updateTime(w, true); }
     save();
   });
-
+ 
   // Peringatan sebelum menutup tab saat ada stopwatch berjalan
   window.addEventListener('beforeunload', e => {
     if (state.watches.some(isRunning)) { e.preventDefault(); e.returnValue = ''; }
   });
-
+ 
   // ---------- Mulai ----------
   renderAll();
   requestAnimationFrame(loop);
 })();
+ 
